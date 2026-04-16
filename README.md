@@ -1,229 +1,206 @@
-# ![freqtrade](https://raw.githubusercontent.com/freqtrade/freqtrade/develop/docs/assets/freqtrade_poweredby.svg)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/freqtrade/freqtrade/develop/docs/assets/freqtrade_poweredby.svg" width="400" alt="Freqtrade" />
+</p>
 
-[![Freqtrade CI](https://github.com/freqtrade/freqtrade/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/freqtrade/freqtrade/actions/)
-[![DOI](https://joss.theoj.org/papers/10.21105/joss.04864/status.svg)](https://doi.org/10.21105/joss.04864)
-[![Coverage Status](https://coveralls.io/repos/github/freqtrade/freqtrade/badge.svg?branch=develop&service=github)](https://coveralls.io/github/freqtrade/freqtrade?branch=develop)
-[![Documentation](https://readthedocs.org/projects/freqtrade/badge/)](https://www.freqtrade.io)
-[![Maintainability](https://api.codeclimate.com/v1/badges/5737e6d668200b7518ff/maintainability)](https://codeclimate.com/github/freqtrade/freqtrade/maintainability)
+<h1 align="center">🤖 Freqtrade Custom Trading Bot</h1>
 
-Freqtrade is a free and open source crypto trading bot written in Python. It is designed to support all major exchanges and be controlled via Telegram or webUI. It contains backtesting, plotting and money management tools as well as strategy optimization by machine learning.
+<p align="center">
+  <b>Automated Crypto Futures Trading System with Advanced Trendline Detection & Korean Telegram Dashboard</b>
+</p>
 
-![freqtrade](https://raw.githubusercontent.com/freqtrade/freqtrade/develop/docs/assets/freqtrade-screenshot.png)
+<p align="center">
+  <img src="https://img.shields.io/badge/exchange-Binance_Futures-F0B90B?style=flat-square&logo=binance" />
+  <img src="https://img.shields.io/badge/framework-Freqtrade-blue?style=flat-square" />
+  <img src="https://img.shields.io/badge/language-Python-3776AB?style=flat-square&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/deploy-Docker-2496ED?style=flat-square&logo=docker&logoColor=white" />
+  <img src="https://img.shields.io/badge/bot-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white" />
+</p>
+
+---
+
+## Overview
+
+A customized [Freqtrade](https://github.com/freqtrade/freqtrade) deployment for **Binance USDT-M Futures** with:
+
+- 📈 **Automated Trendline Detection** — scipy-based support/resistance line computation with linear regression
+- 🎯 **4 Custom Strategies** — from BTC swing trading to low-cap altcoin OI-divergence plays
+- 🇰🇷 **Full Korean Telegram Bot** — PnL cards, in-chat backtesting, live signal analysis
+- 🐳 **One-command Docker deploy** — custom Dockerfile with Pillow for image generation
+
+---
+
+## Strategies
+
+### 🔵 TrendPro (Primary)
+
+> Scalp-optimized trendline strategy for BTC Futures
+
+- Detects dynamic support/resistance using `scipy.signal.argrelextrema` + `numpy.polyfit`
+- Multi-timeframe: 15m entries with 4h trend confirmation
+- ATR-based dynamic stoploss (1.2× ATR, max -1.5%)
+- Aggressive ROI: 0.3–1% targets in 0–30 min windows
+- Shared trendline math via `user_data/lib/trendline_lib.py`
+
+### 🟢 BtcImprovedTrendStrategy
+
+> Swing-trade variant with wider stops for BTC trend-following
+
+- Same trendline core, tuned for longer holds
+- Stoploss -4%, ROI 4–10% targets
+- 2× ATR dynamic stop with fast 3% cut on trend reversal
+- Inline trendline computation (self-contained)
+
+### 🟡 LowCapOIStrategy
+
+> Counter-trend reversal strategy using Open Interest divergence
+
+- Fetches **live Open Interest** from Binance Futures API via ccxt
+- Detects OI/price divergence: price declining while OI increases → reversal signal
+- Mark Price vs Last Price gap analysis (funding rate premium)
+- Triple timeframe: 15m + 4h + 1d
+- `confirm_trade_entry()` hook re-checks OI before execution
+- Graceful backtesting fallback when live data unavailable
+
+### ⚪ SimpleScalp
+
+> Minimal demo strategy for testing & validation
+
+- RSI + MACD + EMA crossover on 5m candles
+- Long-only, micro-profit targets (0.05–0.3%)
+- Intentionally loose conditions for trade generation testing
+
+---
+
+## Telegram Bot Features
+
+All commands output in **Korean (한국어)** with inline keyboard navigation.
+
+| Command | Description |
+|---------|-------------|
+| `/pnl` | 📸 Generates a **visual PnL card image** — styled trade result overlay with profit/loss, entry/exit prices, duration. Uses Pillow for image generation with custom fonts and auto-sizing. |
+| `/backtesting` | 🧪 **Interactive backtesting** — multi-step conversation flow: strategy → start date → end date → runs backtest via subprocess → returns summary. Auto-deletes intermediate messages. |
+| `/signal` | 📊 **Technical signal analysis** — computes RSI, Bollinger Bands, MACD, ADX on 4H data for all whitelisted pairs. Korean-language indicator interpretations with composite buy/sell signal. |
+| `/position` | 💼 **Position dashboard** — all open trades with leverage, entry/current price, P&L %, stoploss. Timestamps in KST (UTC+9). Inline chart button → FreqUI. |
+| `/mystatus` | 📋 Bot status with emoji formatting |
+| `/mybalance` | 💰 Per-coin balance breakdown |
+| `/mytrades` | 📈 Recent 5 trades with profit indicators |
+| `/mystats` | 📉 Win rate, total trades, cumulative profit |
+
+---
+
+## Architecture
+
+```
+freqtrade/
+├── freqtrade/
+│   ├── rpc/
+│   │   ├── telegram.py          # Custom commands: /pnl, /backtesting, /signal, /position
+│   │   └── rpc_manager.py       # Korean state formatting
+│   ├── freqtradebot.py          # Core bot (modified)
+│   └── worker.py                # Worker process
+├── user_data/
+│   ├── strategies/
+│   │   ├── TrendPro.py          # Primary scalp strategy
+│   │   ├── BtcImprovedTrendStrategy.py
+│   │   ├── LowCapOIStrategy.py  # OI-divergence strategy
+│   │   └── SimpleScalp.py       # Demo strategy
+│   ├── lib/
+│   │   └── trendline_lib.py     # Shared trendline math library
+│   ├── config.json              # Bot configuration
+│   └── telegram_patch.py        # Additional custom commands
+├── docker/
+│   └── Dockerfile.custom        # Adds Pillow for PnL cards
+└── docker-compose.yml           # One-command deployment
+```
+
+---
+
+## Quick Start
+
+### 1. Clone & Configure
+
+```bash
+git clone https://github.com/SangHyeonKwon/freqtrade.git
+cd freqtrade
+```
+
+Edit `user_data/config.json`:
+```json
+{
+  "exchange": {
+    "key": "YOUR_BINANCE_API_KEY",
+    "secret": "YOUR_BINANCE_API_SECRET"
+  },
+  "telegram": {
+    "token": "YOUR_TELEGRAM_BOT_TOKEN",
+    "chat_id": "YOUR_CHAT_ID"
+  }
+}
+```
+
+### 2. Deploy with Docker
+
+```bash
+docker compose up -d
+```
+
+The bot starts trading with the **TrendPro** strategy on BTC/USDT Futures.
+
+### 3. Access
+
+- **Telegram**: Open your bot → `/signal` for market analysis, `/position` for trades
+- **FreqUI**: `http://localhost:8081` (user: `freqtrader`)
+
+---
+
+## Trendline Detection Engine
+
+The core differentiator — automated support/resistance trendline computation:
+
+```
+1. Fetch OHLCV data (15m candles)
+2. Find local extrema via scipy.signal.argrelextrema(order=5)
+3. Fit linear regression through extrema points (numpy.polyfit)
+4. Apply weighted regression — recent data weighted 4× more
+5. Smooth with rolling window to reduce noise
+6. Fallback to EMA when insufficient data points
+```
+
+Entry signals trigger when price interacts with trendlines + momentum confirmation (RSI, MACD, ADX, volume spike).
+
+---
+
+## Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `strategy` | TrendPro | Active strategy |
+| `max_open_trades` | 3 | Maximum concurrent positions |
+| `trading_mode` | futures | Binance USDT-M Futures |
+| `margin_mode` | isolated | Per-position margin |
+| `dry_run` | true | Paper trading mode |
+| `dry_run_wallet` | 1000 | Simulated USDT balance |
+| `stake_amount` | unlimited | Uses 99% of available balance |
+
+---
+
+## Tech Stack
+
+- **Framework**: [Freqtrade](https://github.com/freqtrade/freqtrade) (open-source trading bot)
+- **Exchange**: Binance Futures via [ccxt](https://github.com/ccxt/ccxt)
+- **Indicators**: [TA-Lib](https://ta-lib.org/) + scipy + numpy
+- **Telegram**: python-telegram-bot with custom command handlers
+- **Image Gen**: Pillow (PnL card rendering)
+- **Deploy**: Docker Compose with source-mounted volumes
+
+---
 
 ## Disclaimer
 
-This software is for educational purposes only. Do not risk money which
-you are afraid to lose. USE THE SOFTWARE AT YOUR OWN RISK. THE AUTHORS
-AND ALL AFFILIATES ASSUME NO RESPONSIBILITY FOR YOUR TRADING RESULTS.
+> ⚠️ This software is for **educational purposes only**. Cryptocurrency futures trading involves significant risk of loss. Past performance does not guarantee future results. Use at your own risk.
 
-Always start by running a trading bot in Dry-run and do not engage money
-before you understand how it works and what profit/loss you should
-expect.
+---
 
-We strongly recommend you to have coding and Python knowledge. Do not
-hesitate to read the source code and understand the mechanism of this bot.
-
-## Supported Exchange marketplaces
-
-Please read the [exchange specific notes](docs/exchanges.md) to learn about eventual, special configurations needed for each exchange.
-
-- [X] [Binance](https://www.binance.com/)
-- [X] [Bitmart](https://bitmart.com/)
-- [X] [BingX](https://bingx.com/invite/0EM9RX)
-- [X] [Bybit](https://bybit.com/)
-- [X] [Gate.io](https://www.gate.io/ref/6266643)
-- [X] [HTX](https://www.htx.com/)
-- [X] [Hyperliquid](https://hyperliquid.xyz/) (A decentralized exchange, or DEX)
-- [X] [Kraken](https://kraken.com/)
-- [X] [OKX](https://okx.com/)
-- [X] [MyOKX](https://okx.com/) (OKX EEA)
-- [ ] [potentially many others](https://github.com/ccxt/ccxt/). _(We cannot guarantee they will work)_
-
-### Supported Futures Exchanges (experimental)
-
-- [X] [Binance](https://www.binance.com/)
-- [X] [Gate.io](https://www.gate.io/ref/6266643)
-- [X] [Hyperliquid](https://hyperliquid.xyz/) (A decentralized exchange, or DEX)
-- [X] [OKX](https://okx.com/)
-- [X] [Bybit](https://bybit.com/)
-
-Please make sure to read the [exchange specific notes](docs/exchanges.md), as well as the [trading with leverage](docs/leverage.md) documentation before diving in.
-
-### Community tested
-
-Exchanges confirmed working by the community:
-
-- [X] [Bitvavo](https://bitvavo.com/)
-- [X] [Kucoin](https://www.kucoin.com/)
-
-## Documentation
-
-We invite you to read the bot documentation to ensure you understand how the bot is working.
-
-Please find the complete documentation on the [freqtrade website](https://www.freqtrade.io).
-
-## Features
-
-- [x] **Based on Python 3.10+**: For botting on any operating system - Windows, macOS and Linux.
-- [x] **Persistence**: Persistence is achieved through sqlite.
-- [x] **Dry-run**: Run the bot without paying money.
-- [x] **Backtesting**: Run a simulation of your buy/sell strategy.
-- [x] **Strategy Optimization by machine learning**: Use machine learning to optimize your buy/sell strategy parameters with real exchange data.
-- [X] **Adaptive prediction modeling**: Build a smart strategy with FreqAI that self-trains to the market via adaptive machine learning methods. [Learn more](https://www.freqtrade.io/en/stable/freqai/)
-- [x] **Edge position sizing** Calculate your win rate, risk reward ratio, the best stoploss and adjust your position size before taking a position for each specific market. [Learn more](https://www.freqtrade.io/en/stable/edge/).
-- [x] **Whitelist crypto-currencies**: Select which crypto-currency you want to trade or use dynamic whitelists.
-- [x] **Blacklist crypto-currencies**: Select which crypto-currency you want to avoid.
-- [x] **Builtin WebUI**: Builtin web UI to manage your bot.
-- [x] **Manageable via Telegram**: Manage the bot with Telegram.
-- [x] **Display profit/loss in fiat**: Display your profit/loss in fiat currency.
-- [x] **Performance status report**: Provide a performance status of your current trades.
-
-## Quick start
-
-Please refer to the [Docker Quickstart documentation](https://www.freqtrade.io/en/stable/docker_quickstart/) on how to get started quickly.
-
-For further (native) installation methods, please refer to the [Installation documentation page](https://www.freqtrade.io/en/stable/installation/).
-
-## Basic Usage
-
-### Bot commands
-
-```
-usage: freqtrade [-h] [-V]
-                 {trade,create-userdir,new-config,show-config,new-strategy,download-data,convert-data,convert-trade-data,trades-to-ohlcv,list-data,backtesting,backtesting-show,backtesting-analysis,edge,hyperopt,hyperopt-list,hyperopt-show,list-exchanges,list-markets,list-pairs,list-strategies,list-hyperoptloss,list-freqaimodels,list-timeframes,show-trades,test-pairlist,convert-db,install-ui,plot-dataframe,plot-profit,webserver,strategy-updater,lookahead-analysis,recursive-analysis}
-                 ...
-
-Free, open source crypto trading bot
-
-positional arguments:
-  {trade,create-userdir,new-config,show-config,new-strategy,download-data,convert-data,convert-trade-data,trades-to-ohlcv,list-data,backtesting,backtesting-show,backtesting-analysis,edge,hyperopt,hyperopt-list,hyperopt-show,list-exchanges,list-markets,list-pairs,list-strategies,list-hyperoptloss,list-freqaimodels,list-timeframes,show-trades,test-pairlist,convert-db,install-ui,plot-dataframe,plot-profit,webserver,strategy-updater,lookahead-analysis,recursive-analysis}
-    trade               Trade module.
-    create-userdir      Create user-data directory.
-    new-config          Create new config
-    show-config         Show resolved config
-    new-strategy        Create new strategy
-    download-data       Download backtesting data.
-    convert-data        Convert candle (OHLCV) data from one format to
-                        another.
-    convert-trade-data  Convert trade data from one format to another.
-    trades-to-ohlcv     Convert trade data to OHLCV data.
-    list-data           List downloaded data.
-    backtesting         Backtesting module.
-    backtesting-show    Show past Backtest results
-    backtesting-analysis
-                        Backtest Analysis module.
-    edge                Edge module.
-    hyperopt            Hyperopt module.
-    hyperopt-list       List Hyperopt results
-    hyperopt-show       Show details of Hyperopt results
-    list-exchanges      Print available exchanges.
-    list-markets        Print markets on exchange.
-    list-pairs          Print pairs on exchange.
-    list-strategies     Print available strategies.
-    list-hyperoptloss   Print available hyperopt loss functions.
-    list-freqaimodels   Print available freqAI models.
-    list-timeframes     Print available timeframes for the exchange.
-    show-trades         Show trades.
-    test-pairlist       Test your pairlist configuration.
-    convert-db          Migrate database to different system
-    install-ui          Install FreqUI
-    plot-dataframe      Plot candles with indicators.
-    plot-profit         Generate plot showing profits.
-    webserver           Webserver module.
-    strategy-updater    updates outdated strategy files to the current version
-    lookahead-analysis  Check for potential look ahead bias.
-    recursive-analysis  Check for potential recursive formula issue.
-
-options:
-  -h, --help            show this help message and exit
-  -V, --version         show program's version number and exit
-```
-
-### Telegram RPC commands
-
-Telegram is not mandatory. However, this is a great way to control your bot. More details and the full command list on the [documentation](https://www.freqtrade.io/en/latest/telegram-usage/)
-
-- `/start`: Starts the trader.
-- `/stop`: Stops the trader.
-- `/stopentry`: Stop entering new trades.
-- `/status <trade_id>|[table]`: Lists all or specific open trades.
-- `/profit [<n>]`: Lists cumulative profit from all finished trades, over the last n days.
-- `/forceexit <trade_id>|all`: Instantly exits the given trade (Ignoring `minimum_roi`).
-- `/fx <trade_id>|all`: Alias to `/forceexit`
-- `/performance`: Show performance of each finished trade grouped by pair
-- `/balance`: Show account balance per currency.
-- `/daily <n>`: Shows profit or loss per day, over the last n days.
-- `/help`: Show help message.
-- `/version`: Show version.
-
-## Development branches
-
-The project is currently setup in two main branches:
-
-- `develop` - This branch has often new features, but might also contain breaking changes. We try hard to keep this branch as stable as possible.
-- `stable` - This branch contains the latest stable release. This branch is generally well tested.
-- `feat/*` - These are feature branches, which are being worked on heavily. Please don't use these unless you want to test a specific feature.
-
-## Support
-
-### Help / Discord
-
-For any questions not covered by the documentation or for further information about the bot, or to simply engage with like-minded individuals, we encourage you to join the Freqtrade [discord server](https://discord.gg/p7nuUNVfP7).
-
-### [Bugs / Issues](https://github.com/freqtrade/freqtrade/issues?q=is%3Aissue)
-
-If you discover a bug in the bot, please
-[search the issue tracker](https://github.com/freqtrade/freqtrade/issues?q=is%3Aissue)
-first. If it hasn't been reported, please
-[create a new issue](https://github.com/freqtrade/freqtrade/issues/new/choose) and
-ensure you follow the template guide so that the team can assist you as
-quickly as possible.
-
-For every [issue](https://github.com/freqtrade/freqtrade/issues/new/choose) created, kindly follow up and mark satisfaction or reminder to close issue when equilibrium ground is reached.
-
---Maintain github's [community policy](https://docs.github.com/en/site-policy/github-terms/github-community-code-of-conduct)--
-
-### [Feature Requests](https://github.com/freqtrade/freqtrade/labels/enhancement)
-
-Have you a great idea to improve the bot you want to share? Please,
-first search if this feature was not [already discussed](https://github.com/freqtrade/freqtrade/labels/enhancement).
-If it hasn't been requested, please
-[create a new request](https://github.com/freqtrade/freqtrade/issues/new/choose)
-and ensure you follow the template guide so that it does not get lost
-in the bug reports.
-
-### [Pull Requests](https://github.com/freqtrade/freqtrade/pulls)
-
-Feel like the bot is missing a feature? We welcome your pull requests!
-
-Please read the
-[Contributing document](https://github.com/freqtrade/freqtrade/blob/develop/CONTRIBUTING.md)
-to understand the requirements before sending your pull-requests.
-
-Coding is not a necessity to contribute - maybe start with improving the documentation?
-Issues labeled [good first issue](https://github.com/freqtrade/freqtrade/labels/good%20first%20issue) can be good first contributions, and will help get you familiar with the codebase.
-
-**Note** before starting any major new feature work, *please open an issue describing what you are planning to do* or talk to us on [discord](https://discord.gg/p7nuUNVfP7) (please use the #dev channel for this). This will ensure that interested parties can give valuable feedback on the feature, and let others know that you are working on it.
-
-**Important:** Always create your PR against the `develop` branch, not `stable`.
-
-## Requirements
-
-### Up-to-date clock
-
-The clock must be accurate, synchronized to a NTP server very frequently to avoid problems with communication to the exchanges.
-
-### Minimum hardware required
-
-To run this bot we recommend you a cloud instance with a minimum of:
-
-- Minimal (advised) system requirements: 2GB RAM, 1GB disk space, 2vCPU
-
-### Software requirements
-
-- [Python >= 3.10](http://docs.python-guide.org/en/latest/starting/installation/)
-- [pip](https://pip.pypa.io/en/stable/installing/)
-- [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
-- [TA-Lib](https://ta-lib.github.io/ta-lib-python/)
-- [virtualenv](https://virtualenv.pypa.io/en/stable/installation.html) (Recommended)
-- [Docker](https://www.docker.com/products/docker) (Recommended)
+<p align="center">
+  Built with ❤️ on top of <a href="https://github.com/freqtrade/freqtrade">Freqtrade</a>
+</p>

@@ -14,6 +14,36 @@ from freqtrade.rpc.rpc_types import RPCSendMsg
 logger = logging.getLogger(__name__)
 
 
+def format_roi(roi_dict: dict) -> str:
+    """
+    Format ROI dictionary to show minimum ROI value (key '0' or highest value)
+    Example: {'0': 0.04, '15': 0.06} -> "4.0%"
+    """
+    if not roi_dict or not isinstance(roi_dict, dict):
+        return str(roi_dict)
+    
+    # Get ROI value for immediate exit (key '0') if exists, otherwise highest value
+    if "0" in roi_dict:
+        roi_value = roi_dict["0"]
+    else:
+        roi_value = max(roi_dict.values())
+    
+    roi_percent = roi_value * 100
+    
+    return f"{roi_percent:.1f}%"
+
+
+def format_state_korean(state_str: str) -> str:
+    """상태를 한국어로 변환"""
+    state_map = {
+        "running": "실행 중",
+        "paused": "일시 정지",
+        "stopped": "중지됨",
+        "reload_config": "설정 재로드 중",
+    }
+    return state_map.get(state_str.lower(), state_str)
+
+
 class RPCManager:
     """
     Class to manage RPC objects (Telegram, API, ...)
@@ -99,44 +129,59 @@ class RPCManager:
                         }
                     )
 
-    def startup_messages(self, config: Config, pairlist, protections) -> None:
-        if config["dry_run"]:
-            self.send_msg(
-                {
-                    "type": RPCMessageType.WARNING,
-                    "status": "Dry run is enabled. All trades are simulated.",
-                }
-            )
+    def startup_messages(self, config: Config, pairlist, protections, state: str | None = None) -> None:
         stake_currency = config["stake_currency"]
         stake_amount = config["stake_amount"]
         minimal_roi = config["minimal_roi"]
         stoploss = config["stoploss"]
         trailing_stop = config["trailing_stop"]
         timeframe = config["timeframe"]
-        exchange_name = config["exchange"]["name"]
+        exchange_raw_name = config["exchange"]["name"]
+        # Pretty name for display (keep config value intact for ccxt)
+        exchange_name = (
+            "Binance"
+            if exchange_raw_name.lower() in ("binance", "binanceusdm", "binanceusdtm")
+            else exchange_raw_name
+        )
         strategy_name = config.get("strategy", "")
         pos_adjust_enabled = "On" if config["position_adjustment_enable"] else "Off"
-        self.send_msg(
-            {
-                "type": RPCMessageType.STARTUP,
-                "status": f"*Exchange:* `{exchange_name}`\n"
-                f"*Stake per trade:* `{stake_amount} {stake_currency}`\n"
-                f"*Minimum ROI:* `{minimal_roi}`\n"
-                f"*{'Trailing ' if trailing_stop else ''}Stoploss:* `{stoploss}`\n"
-                f"*Position adjustment:* `{pos_adjust_enabled}`\n"
-                f"*Timeframe:* `{timeframe}`\n"
-                f"*Strategy:* `{strategy_name}`",
-            }
-        )
-        self.send_msg(
-            {
-                "type": RPCMessageType.STARTUP,
-                "status": f"Searching for {stake_currency} pairs to buy and sell "
-                f"based on {pairlist.short_desc()}",
-            }
-        )
+        
+        # 통합된 구조화된 메시지 생성
+        message_parts = []
+        message_parts.append("🤖 *봇 시작 알림*")
+        message_parts.append("━━━━━━━━━━━━━━━━")
+        message_parts.append("")
+        message_parts.append("📊 *설정 정보*")
+        message_parts.append(f"• 거래소: `{exchange_name}`")
+        message_parts.append(f"• 전략: `{strategy_name}`")
+        message_parts.append(f"• 타임프레임: `{timeframe}`")
+        message_parts.append(f"• 포지션당 마진: `{stake_amount} {stake_currency}`")
+        message_parts.append(f"• 최소 수익률: `{format_roi(minimal_roi)}`")
+        message_parts.append(f"• {'후행 ' if trailing_stop else ''}스탑로스: `{stoploss}`")
+        message_parts.append(f"• 포지션 조정: `{pos_adjust_enabled}`")
+        message_parts.append("")
+        message_parts.append("🔍 *페어리스트*")
+        message_parts.append(f"{stake_currency} 페어를 검색하여 매수 및 매도합니다")
+        
         if len(protections.name_list) > 0:
             prots = "\n".join([p for prot in protections.short_desc() for k, p in prot.items()])
-            self.send_msg(
-                {"type": RPCMessageType.STARTUP, "status": f"Using Protections: \n{prots}"}
-            )
+            message_parts.append("")
+            message_parts.append("🛡️ *보호 기능*")
+            message_parts.append(prots)
+        
+        if config["dry_run"]:
+            message_parts.append("")
+            message_parts.append("⚠️ *주의*")
+            message_parts.append("드라이런이 활성화되어 있습니다.")
+            message_parts.append("모든 거래는 시뮬레이션됩니다.")
+        
+        message_parts.append("")
+        message_parts.append("━━━━━━━━━━━━━━━━")
+        
+        # 하나의 통합 메시지로 전송
+        self.send_msg(
+            {
+                "type": RPCMessageType.STARTUP,
+                "status": "\n".join(message_parts),
+            }
+        )

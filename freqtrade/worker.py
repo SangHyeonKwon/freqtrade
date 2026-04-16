@@ -90,16 +90,21 @@ class Worker:
 
         # Log state transition
         if state != old_state:
-            if old_state != State.RELOAD_CONFIG:
-                self.freqtrade.notify_status(f"{state.name.lower()}")
-
             logger.info(
                 f"Changing state{f' from {old_state.name}' if old_state else ''} to: {state.name}"
             )
-            if state in (State.RUNNING, State.PAUSED) and old_state not in (
+            
+            # startup이 호출되는 경우 상태 메시지는 startup_messages에서 처리되므로 별도 전송하지 않음
+            will_call_startup = state in (State.RUNNING, State.PAUSED) and old_state not in (
                 State.RUNNING,
                 State.PAUSED,
-            ):
+            )
+            
+            if old_state != State.RELOAD_CONFIG and not will_call_startup:
+                # startup이 아닌 경우에만 별도 상태 메시지 전송
+                self.freqtrade.notify_status(f"{state.name.lower()}")
+            
+            if will_call_startup:
                 self.freqtrade.startup()
 
             if state == State.STOPPED:
@@ -235,5 +240,21 @@ class Worker:
         self._notify("STOPPING=1")
 
         if self.freqtrade:
-            self.freqtrade.notify_status("process died")
+            # 구조화된 재시작 알림 메시지 전송
+            from freqtrade.enums import RPCMessageType
+            restart_message = (
+                "🔄 *봇 재시작 알림*\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "\n"
+                "⚠️ *상태:* `프로세스 종료됨`\n"
+                "\n"
+                "봇이 재시작됩니다.\n"
+                "잠시 후 자동으로 다시 시작됩니다.\n"
+                "\n"
+                "━━━━━━━━━━━━━━━━"
+            )
+            self.freqtrade.rpc.send_msg({
+                "type": RPCMessageType.STATUS,
+                "status": restart_message
+            })
             self.freqtrade.cleanup()
